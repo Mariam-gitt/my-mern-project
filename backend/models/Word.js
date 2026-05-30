@@ -1,0 +1,86 @@
+// // const mongoose = require("mongoose");
+
+// // const wordSchema = new mongoose.Schema({
+
+// //     userId: {
+// //         type: mongoose.Schema.Types.ObjectId,
+// //         ref: "User"
+// //     },
+
+// //     word: String,
+// //     meaning: String,
+// //     synonyms: [String],
+// //     exampleSentence: String
+
+// // }, { timestamps: true });
+
+// // module.exports = mongoose.model("Word", wordSchema);
+
+// const mongoose = require("mongoose");
+
+// const wordSchema = new mongoose.Schema({
+
+//     userId: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: "User"
+//     },
+
+//     word: String,
+//     meaning: String,
+//     synonyms: [String],
+//     exampleSentence: String
+
+// }, { timestamps: true });
+
+// module.exports = mongoose.model("Word", wordSchema);
+
+const mongoose = require("mongoose");
+
+const wordSchema = new mongoose.Schema({
+
+    // Link word to logged-in user
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+    },
+
+    word: {
+        type: String,
+        required: true
+    },
+
+    meaning: String,
+
+    exampleSentence: String,
+
+    synonyms: [String],
+
+    // review | learned
+    status: {
+        type: String,
+        default: "review"
+    },
+
+    // Quiz tracking
+    correctCount: {
+        type: Number,
+        default: 0
+    },
+
+    wrongCount: {
+        type: Number,
+        default: 0
+    },
+
+    // Flashcard review tracking
+    lastReviewed: {
+        type: Date
+    }
+
+},
+{
+    timestamps: true
+});
+
+module.exports = mongoose.model("Word", wordSchema);
