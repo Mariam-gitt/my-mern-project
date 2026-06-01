@@ -1,4 +1,4 @@
-version: "3.9"
+# version: "3.9"
 
 services:
 
@@ -66,16 +66,16 @@ services:
       - wk_net
 
   # ── OCR service (port 5003) ──────────────────────────────────────────
-  ocr_service:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.ocr
-    container_name: wk_ocr
-    restart: unless-stopped
-    ports:
-      - "5003:5003"
-    networks:
-      - wk_net
+  # ocr_service:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile.ocr
+  #   container_name: wk_ocr
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5003:5003"
+  #   networks:
+  #     - wk_net
 
   # ── RAG+LLM service (port 5004) ─────────────────────────────────────
   rag_llm_service:
