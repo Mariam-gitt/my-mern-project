@@ -194,6 +194,6 @@ class RAGLLMHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("localhost", 5004), RAGLLMHandler)
+    server = HTTPServer(("0.0.0.0", 5004), RAGLLMHandler)
     print("RAG+LLM service running on port 5004 ✅")
     server.serve_forever()

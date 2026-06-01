@@ -160,6 +160,6 @@ class RAGHandler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     RAGHandler.db = load_db()
     print(f"RAG service — {len(RAGHandler.db)} words loaded from disk")
-    server = HTTPServer(("localhost", 5002), RAGHandler)
+    server = HTTPServer(("0.0.0.0", 5002), RAGHandler)
     print("Running on port 5002 ✅")
     server.serve_forever()

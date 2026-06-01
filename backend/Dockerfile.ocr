@@ -1,0 +1,30 @@
+# ── OCR service — needs Tesseract + OpenCV ───────────────────────────
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Tesseract + image libs
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY ocr_service.py .
+
+# Override the Windows Tesseract path — in the container it's just "tesseract"
+RUN sed -i \
+    's|pytesseract.pytesseract.tesseract_cmd = .*|pytesseract.pytesseract.tesseract_cmd = "tesseract"|' \
+    ocr_service.py
+
+EXPOSE 5003
+
+CMD ["python", "-u", "ocr_service.py"]

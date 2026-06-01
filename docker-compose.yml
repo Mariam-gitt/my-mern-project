@@ -1,0 +1,115 @@
+version: "3.9"
+
+services:
+
+  # ── MongoDB ─────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: wk_mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - wk_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Node / Express backend ───────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wk_backend
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - wk_net
+
+  # ── PDF service (port 5001) ──────────────────────────────────────────
+  pdf_service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_FILE: pdf_service.py
+        SERVICE_PORT: 5001
+    container_name: wk_pdf
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    networks:
+      - wk_net
+
+  # ── RAG service (port 5002) ──────────────────────────────────────────
+  rag_service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_FILE: rag_service.py
+        SERVICE_PORT: 5002
+    container_name: wk_rag
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    networks:
+      - wk_net
+
+  # ── OCR service (port 5003) ──────────────────────────────────────────
+  ocr_service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ocr
+    container_name: wk_ocr
+    restart: unless-stopped
+    ports:
+      - "5003:5003"
+    networks:
+      - wk_net
+
+  # ── RAG+LLM service (port 5004) ─────────────────────────────────────
+  rag_llm_service:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.python
+      args:
+        SERVICE_FILE: rag_llm_service.py
+        SERVICE_PORT: 5004
+    container_name: wk_ragllm
+    restart: unless-stopped
+    env_file: ./backend/.env.docker
+    ports:
+      - "5004:5004"
+    networks:
+      - wk_net
+
+  # ── React frontend (served by Nginx) ────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wk_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - wk_net
+
+volumes:
+  mongo_data:
+
+networks:
+  wk_net:
+    driver: bridge

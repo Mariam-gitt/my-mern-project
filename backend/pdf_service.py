@@ -115,6 +115,6 @@ class PDFHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("localhost", 5001), PDFHandler)
+    server = HTTPServer(("0.0.0.0", 5001), PDFHandler)
     print("PDF extraction service running on port 5001 ✅")
     server.serve_forever()

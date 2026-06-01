@@ -1,27 +1,20 @@
-const express = require("express");
-const router = express.Router();
-const multer = require("multer");
-const axios = require("axios");
-const fs = require("fs");
-const protect = require("../middleware/authMiddleware");
-const Word = require("../models/Word");
+const express  = require("express");
+const router   = express.Router();
+const multer   = require("multer");
+const axios    = require("axios");
+const protect  = require("../middleware/authMiddleware");
+const Word     = require("../models/Word");
 
-// Store PDF in memory temporarily
 const upload = multer({ storage: multer.memoryStorage() });
 
-/**
- * POST /api/pdf/import
- * Upload a PDF, extract highlighted words, add to vocab
- */
+/* ─────────────────────────────────────────────────────────
+   POST /api/pdf/import
+   Send PDF to Python pdf_service → extract highlighted words
+────────────────────────────────────────────────────────── */
 router.post("/import", protect, upload.single("pdf"), async (req, res) => {
-
     try {
+        if (!req.file) return res.status(400).json({ message: "No PDF file uploaded" });
 
-        if (!req.file) {
-            return res.status(400).json({ message: "No PDF file uploaded" });
-        }
-
-        // Send PDF to Python service for extraction
         const pythonRes = await axios.post(
             "http://localhost:5001/extract",
             req.file.buffer,
@@ -32,240 +25,212 @@ router.post("/import", protect, upload.single("pdf"), async (req, res) => {
         );
 
         const { words } = pythonRes.data;
-
-        if (!words || words.length === 0) {
+        if (!words || words.length === 0)
             return res.status(200).json({ message: "No highlighted words found", added: [] });
-        }
 
-        // For each word, fetch meaning from dictionary API and save
-        const dictionaryAPI = require("../controllers/wordController");
-        const added = [];
-        const failed = [];
+        const added = [], failed = [];
 
         for (const word of words) {
-
             try {
-
-                // Check if word already exists for this user
                 const exists = await Word.findOne({ userId: req.user, word });
                 if (exists) continue;
 
-                // Fetch meaning
-                const dictRes = await axios.get(
-                    `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`
-                );
-
-                const data = dictRes.data?.[0];
+                const dictRes = await axios.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+                const data    = dictRes.data?.[0];
                 const meaning = data?.meanings?.[0]?.definitions?.[0]?.definition || "No meaning found";
-                const example = data?.meanings?.[0]?.definitions?.[0]?.example || "No example available";
+                const example = data?.meanings?.[0]?.definitions?.[0]?.example   || "No example available";
                 const synonyms = data?.meanings?.[0]?.definitions?.[0]?.synonyms || [];
 
-                const newWord = await Word.create({
-                    userId: req.user,
-                    word,
-                    meaning,
-                    exampleSentence: example,
-                    synonyms,
-                    status: "review"
-                });
-
+                const newWord = await Word.create({ userId: req.user, word, meaning, exampleSentence: example, synonyms, status: "review" });
                 added.push(newWord);
-
-            } catch (err) {
-                // Word not found in dictionary or already exists — skip
-                failed.push(word);
-            }
+            } catch { failed.push(word); }
         }
 
-        res.status(200).json({
-            message: `Added ${added.length} words from PDF`,
-            added,
-            failed
-        });
+        res.json({ message: `Added ${added.length} words from PDF`, added, failed });
 
     } catch (error) {
         console.log("PDF IMPORT ERROR:", error.message);
-
-        // Friendly error if Python service isn't running
-        if (error.code === "ECONNREFUSED") {
-            return res.status(500).json({
-                message: "PDF service not running. Start it with: python pdf_service.py"
-            });
-        }
-
+        if (error.code === "ECONNREFUSED")
+            return res.status(500).json({ message: "PDF service not running. Start it with: python pdf_service.py" });
         res.status(500).json({ message: "Failed to import PDF" });
     }
 });
 
-module.exports = router;
+/* ─────────────────────────────────────────────────────────
+   POST /api/pdf/analyze-difficulty
+   Extract hard vocabulary words from any text-based PDF.
 
+   Algorithm:
+    1. Parse PDF text with pdf-parse
+    2. Tokenise into all words ≥ 4 chars, count frequencies
+    3. Build EASY_WORDS set — skip the ~1 000 most common English words
+    4. Score remaining words by:
+         • Length                 (longer = harder)
+         • Academic suffix match  (-tion, -ity, -ology …)
+         • Academic prefix match  (inter-, micro-, pseudo- …)
+         • Rarity in this doc     (appears only 1-2 times = less familiar)
+    5. Exclude words already in the user's vocab
+    6. Return top 50, sorted score-desc, with PDF meta-stats
+────────────────────────────────────────────────────────── */
 
-/**
- * POST /api/pdf/analyze-difficulty
- *
- * Improved difficulty detection logic:
- * 1. Extract text with pdf-parse
- * 2. Tokenize — capture ALL words >= 4 chars (wider net than before)
- * 3. Count frequency — rare words (appear 1-2x) are harder
- * 4. Score by: length + academic suffixes + low frequency + NOT in 5000 common words
- * 5. Remove words already in user's vocab
- * 6. Return up to 50 words, sorted by difficulty score desc
- * 7. Also return frequency info for transparency
- */
-
-// Top ~700 most common English words — these are "easy" and excluded
-const COMMON_WORDS = new Set([
-  "about","above","across","after","again","against","almost","alone","along","already",
-  "also","although","always","among","another","anyone","anything","anyway","around",
-  "because","before","being","below","between","beyond","bring","brought","called",
-  "cannot","comes","could","didn","does","doing","done","down","during","each","either",
-  "enough","every","except","felt","find","first","found","from","gave","getting",
-  "give","given","going","good","great","had","hasn","have","having","hence","here",
-  "high","himself","home","however","if","into","itself","just","keep","kept","know",
-  "large","last","left","less","light","like","little","long","look","looked","made",
-  "make","many","maybe","mean","might","more","most","move","much","must","myself",
-  "near","need","never","next","number","often","once","only","open","other","over",
-  "page","part","people","place","point","quite","rather","reach","real","really",
-  "right","said","same","seem","seen","self","shall","show","should","since","small",
-  "some","soon","still","such","sure","take","than","that","their","them","then",
-  "there","these","they","thing","think","this","those","through","time","today",
-  "together","told","took","toward","under","until","upon","used","using","very",
-  "want","well","went","were","what","when","where","which","while","whose","will",
-  "with","within","without","word","work","world","would","write","years","your",
-  "please","terms","title","table","study","three","times","pages","volume","often",
-  "various","whether","toward","university","therefore","among","though","both",
-  "following","another","through","during","before","always","around","without",
-  "himself","itself","myself","yourself","herself","ourselves","themselves",
-  "became","become","becomes","begin","began","begun","contain","contains","contained",
-  "different","early","end","even","example","general","given","help","important",
-  "include","large","later","likely","little","long","many","might","more","most",
-  "move","much","must","need","never","next","note","often","only","open","other",
-  "over","own","part","people","place","point","put","quite","rather","reach","real",
-  "right","same","seem","show","since","small","some","soon","still","such","sure",
-  "take","tell","than","then","there","these","they","this","those","three","time",
-  "under","until","used","want","well","went","were","what","when","where","which",
-  "while","will","with","word","work","would","write","year",
+// ~1 000 most common English words — all considered "easy"
+const EASY_WORDS = new Set([
+  "about","above","across","after","again","against","almost","alone","along",
+  "already","also","although","always","among","another","anyone","anything",
+  "anyway","around","back","became","because","become","becomes","before",
+  "being","below","between","beyond","both","bring","brought","called","came",
+  "cannot","comes","could","didn","does","doing","done","down","during","each",
+  "early","either","else","enough","even","every","example","except","fact",
+  "felt","find","first","follows","found","from","gave","general","getting",
+  "give","given","going","good","great","hand","hasn","have","having","help",
+  "hence","here","high","himself","home","however","important","include",
+  "into","itself","just","keep","kept","know","large","last","later","left",
+  "less","light","like","likely","little","long","look","looked","made","make",
+  "many","maybe","mean","might","more","most","move","much","must","myself",
+  "near","need","never","next","note","often","once","only","open","other",
+  "over","page","part","people","place","point","probably","put","quite",
+  "rather","reach","real","really","right","said","same","seem","seen","self",
+  "several","shall","show","should","since","small","some","soon","still",
+  "such","sure","take","tell","than","that","their","them","then","there",
+  "these","they","thing","think","this","those","though","three","through",
+  "time","today","together","told","took","toward","under","until","upon",
+  "used","using","very","want","well","went","were","what","when","where",
+  "which","while","whose","will","with","within","without","word","work",
+  "world","would","write","year","your","please","terms","title","table",
+  "study","times","pages","volume","various","whether","therefore","following",
+  "different","including","however","although","because","between","through",
+  "might","could","should","would","these","those","their","where","which",
+  "while","after","before","since","until","during","against","about","above",
+  "below","under","over","into","onto","upon","from","with","without","within",
+  "along","across","around","behind","beside","between","beyond","except",
+  "inside","outside","toward","amongst","despite","except","regarding",
 ]);
 
-// Academic / technical suffixes — strong signal of a harder word
 const ACADEMIC_SUFFIXES = [
-  "tion","sion","ment","ness","ity","ism","ist","ize","ise","ical","ive","ous",
-  "ence","ance","ogy","phy","sis","tic","tude","ology","ography","ometry","onomy",
-  "ectomy","ology","istic","ification","ization","isation","atorial","atorial",
+  "tion","sion","ment","ness","ity","ism","ist","ize","ise","ical","ive",
+  "ous","ence","ance","ogy","phy","sis","tic","tude","ology","ography",
+  "ometry","onomy","istic","ification","ization","isation","atorial",
+  "aneous","aneous","escent","iferous","ivorous","omorphic",
 ];
 
-// Academic prefixes — another signal
 const ACADEMIC_PREFIXES = [
-  "anti","auto","bio","chrono","circum","contra","counter","de","dis","eco",
-  "epi","equi","hetero","homo","hyper","hypo","inter","intra","intro","iso",
-  "macro","micro","mono","multi","neo","non","omni","over","para","peri",
-  "photo","poly","post","pre","pseudo","psycho","retro","semi","socio","sub",
-  "super","supra","syn","tele","trans","ultra","under","uni",
+  "anti","auto","bio","chrono","circum","contra","counter","crypto","cyber",
+  "demo","eco","epi","equi","ethno","geo","hetero","homo","hydro","hyper",
+  "hypo","inter","intra","intro","iso","macro","micro","mono","morph","multi",
+  "neo","neuro","non","omni","ortho","para","peri","photo","phys","poly",
+  "post","pre","proto","pseudo","psycho","retro","semi","socio","stereo",
+  "sub","super","supra","sym","syn","tele","theo","thermo","trans","ultra",
+  "uni","vaso",
 ];
 
-function difficultyScore(word, freq, totalTokens) {
-  let s = 0;
+function scoreDifficulty(word, freq, totalTokens) {
+    let s = 0;
+    const len = word.length;
 
-  // Length score (longer = harder)
-  const len = word.length;
-  if (len >= 6)  s += 1;
-  if (len >= 8)  s += 2;
-  if (len >= 10) s += 3;
-  if (len >= 13) s += 2;
+    // Length score
+    if (len >= 6)  s += 1;
+    if (len >= 8)  s += 2;
+    if (len >= 10) s += 3;
+    if (len >= 13) s += 2;
 
-  // Academic suffix (strong positive signal)
-  if (ACADEMIC_SUFFIXES.some(sx => word.endsWith(sx))) s += 4;
+    // Academic suffix — strongest signal
+    if (ACADEMIC_SUFFIXES.some(sx => word.endsWith(sx))) s += 5;
 
-  // Academic prefix (positive signal)
-  if (ACADEMIC_PREFIXES.some(px => word.startsWith(px))) s += 2;
+    // Academic prefix — good signal
+    if (ACADEMIC_PREFIXES.some(px => word.startsWith(px))) s += 3;
 
-  // Rarity bonus — words that appear rarely in the text are less familiar
-  const relFreq = freq / totalTokens;
-  if (relFreq < 0.0003) s += 3;  // very rare in this doc
-  else if (relFreq < 0.001) s += 1;
+    // Rarity bonus (infrequent in this specific text → less familiar)
+    const relFreq = freq / totalTokens;
+    if (relFreq < 0.0002) s += 4;
+    else if (relFreq < 0.001) s += 2;
+    else if (relFreq < 0.003) s += 1;
 
-  // NOT in common word list
-  if (!COMMON_WORDS.has(word)) s += 2;
-
-  return s;
+    return s;
 }
 
 router.post("/analyze-difficulty", protect, upload.single("pdf"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: "No PDF file provided" });
-
-    let pdfParse;
     try {
-      pdfParse = require("pdf-parse");
-    } catch {
-      return res.status(500).json({ message: "pdf-parse not installed. Run: npm install pdf-parse in /backend" });
+        if (!req.file) return res.status(400).json({ message: "No PDF file provided" });
+
+        // Validate it's actually a PDF by checking magic bytes
+        const buf = req.file.buffer;
+        const magic = buf.slice(0, 4).toString("ascii");
+        if (magic !== "%PDF") {
+            return res.status(400).json({ message: "That doesn't look like a PDF file. Please upload a .pdf document." });
+        }
+
+        let pdfParse;
+        try { pdfParse = require("pdf-parse"); }
+        catch { return res.status(500).json({ message: "pdf-parse not installed. Run: cd backend && npm install pdf-parse" }); }
+
+        let pdfData;
+        try { pdfData = await pdfParse(buf); }
+        catch (e) {
+            console.log("pdf-parse error:", e.message);
+            return res.status(400).json({ message: "Could not parse this PDF. It may be password-protected or corrupted." });
+        }
+
+        const rawText = pdfData.text || "";
+        if (rawText.trim().length < 100) {
+            return res.status(400).json({
+                message: "This PDF has no extractable text — it may be a scanned image. Try a PDF with selectable text."
+            });
+        }
+
+        // Tokenise — capture all lowercase words ≥ 4 chars
+        const allTokens = rawText.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
+        const totalTokens = allTokens.length;
+
+        if (totalTokens < 30) {
+            return res.status(400).json({ message: "Not enough text found in this PDF to analyse." });
+        }
+
+        // Build frequency map
+        const freqMap = {};
+        for (const tok of allTokens) {
+            freqMap[tok] = (freqMap[tok] || 0) + 1;
+        }
+
+        // Fetch user's known words
+        const existingWords = await Word.find({ userId: req.user }, "word").lean();
+        const knownSet = new Set(existingWords.map(w => w.word.toLowerCase()));
+
+        // Score and rank
+        const scored = Object.entries(freqMap)
+            .filter(([word]) =>
+                word.length >= 5         &&   // at least 5 chars
+                !EASY_WORDS.has(word)    &&   // not a common easy word
+                !knownSet.has(word)      &&   // not already in user's vocab
+                /^[a-z]+$/.test(word)         // pure alpha only (no numbers/hyphens)
+            )
+            .map(([word, freq]) => ({
+                word,
+                freq,
+                score: scoreDifficulty(word, freq, totalTokens)
+            }))
+            .filter(w => w.score >= 4)        // minimum difficulty bar (lowered from 5)
+            .sort((a, b) => b.score - a.score || a.freq - b.freq)
+            .slice(0, 50);
+
+        const words = scored.map(w => w.word);
+
+        console.log(`[Difficulty] ${totalTokens} tokens → ${Object.keys(freqMap).length} unique → ${words.length} difficult`);
+
+        res.json({
+            words,
+            total: words.length,
+            pdfStats: {
+                pages:       pdfData.numpages || 0,
+                totalTokens,
+                uniqueWords: Object.keys(freqMap).length,
+            }
+        });
+
+    } catch (err) {
+        console.log("ANALYZE-DIFFICULTY ERROR:", err.message);
+        res.status(500).json({ message: `Analysis failed: ${err.message}` });
     }
-
-    let pdfData;
-    try {
-      pdfData = await pdfParse(req.file.buffer);
-    } catch (e) {
-      return res.status(400).json({ message: "Could not read PDF. Make sure it contains real text (not a scanned image)." });
-    }
-
-    const rawText = pdfData.text || "";
-    if (rawText.trim().length < 50) {
-      return res.status(400).json({ message: "PDF appears to be image-only or empty. Use a text-based PDF." });
-    }
-
-    // Tokenize — all lowercase words >= 4 chars
-    const allTokens = (rawText.toLowerCase().match(/\b[a-z]{4,}\b/g) || []);
-    const totalTokens = allTokens.length;
-
-    if (totalTokens < 20) {
-      return res.status(400).json({ message: "Not enough text extracted from this PDF." });
-    }
-
-    // Count frequency of each word
-    const freqMap = {};
-    for (const tok of allTokens) {
-      freqMap[tok] = (freqMap[tok] || 0) + 1;
-    }
-
-    // Get user's existing vocab (skip already-known words)
-    const existingWords = await Word.find({ userId: req.user }, "word").lean();
-    const knownSet = new Set(existingWords.map(w => w.word.toLowerCase()));
-
-    // Score every unique word
-    const scored = Object.entries(freqMap)
-      .filter(([word]) =>
-        word.length >= 5 &&               // at least 5 chars
-        !COMMON_WORDS.has(word) &&         // not a super common word
-        !knownSet.has(word) &&             // not already in vocab
-        /^[a-z]+$/.test(word)             // pure alpha only
-      )
-      .map(([word, freq]) => ({
-        word,
-        freq,
-        score: difficultyScore(word, freq, totalTokens)
-      }))
-      .filter(w => w.score >= 5)           // minimum difficulty threshold
-      .sort((a, b) => b.score - a.score || a.freq - b.freq)  // sort by score, then rarer first
-      .slice(0, 50);
-
-    const words = scored.map(w => w.word);
-
-    console.log(`[Difficulty] PDF: ${totalTokens} tokens, ${Object.keys(freqMap).length} unique, ${words.length} difficult found`);
-
-    res.json({
-      words,
-      total: words.length,
-      pdfStats: {
-        totalTokens,
-        uniqueWords: Object.keys(freqMap).length,
-        pages: pdfData.numpages || 0
-      }
-    });
-
-  } catch (err) {
-    console.log("ANALYZE-DIFFICULTY ERROR:", err.message, err.stack);
-    res.status(500).json({ message: `Analysis failed: ${err.message}` });
-  }
 });
 
+// ← single export, at the very end
 module.exports = router;

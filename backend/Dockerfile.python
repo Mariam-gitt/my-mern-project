@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+ARG SERVICE_FILE=pdf_service.py
+ARG SERVICE_PORT=5001
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY *.py ./
+
+EXPOSE ${SERVICE_PORT}
+
+# Write the entry point dynamically from build arg
+RUN echo "#!/bin/sh\nexec python -u ${SERVICE_FILE}" > /start.sh && chmod +x /start.sh
+
+CMD ["/start.sh"]
