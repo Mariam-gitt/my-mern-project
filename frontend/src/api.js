@@ -5,10 +5,14 @@ import axios from "axios";
 /**
  * Create a reusable axios instance
  */
-const api = axios.create({
-    baseURL: "http://localhost:5000/api"
-});
+// const api = axios.create({
+//     baseURL: "http://localhost:5000/api"
+// });
 
+const api = axios.create({
+    // Replace this string with your actual live Vercel URL
+    baseURL: "https://my-mern-project-backend.vercel.app/api"
+});
 
 /**
  * AUTO-ATTACH TOKEN TO EVERY REQUEST
