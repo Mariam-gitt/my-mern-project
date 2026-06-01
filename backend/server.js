@@ -57,6 +57,36 @@ connectDB();
 const app = express();
 
 // 🛠️ FIX 1: Configure CORS explicitly for Vercel
+// app.use(cors({
+//     origin: "https://my-mern-project-frontend-1.vercel.app",
+//     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//     credentials: true
+// }));
+
+// middleware
+// app.use(cors({
+//     origin: "https://my-mern-project-frontend-1.vercel.app",
+//     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization"],
+//     credentials: true
+// }));
+
+// // 🛠️ THE CRITICAL FIX: Express 4 requires (.*) instead of just *
+// app.options("/(.*)", cors());
+
+// app.use(express.json());
+
+
+
+
+// 🛠️ FIX 2: Handle preflight requests globally
+// app.options("*", cors());
+
+// app.use(express.json());
+
+
+// middleware
 app.use(cors({
     origin: "https://my-mern-project-frontend-1.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -64,8 +94,8 @@ app.use(cors({
     credentials: true
 }));
 
-// 🛠️ FIX 2: Handle preflight requests globally
-app.options("*", cors());
+// 🛠️ ONLY CHANGE THIS ONE LINE BELOW:
+app.options("/(.*)", cors()); 
 
 app.use(express.json());
 
