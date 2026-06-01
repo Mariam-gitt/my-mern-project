@@ -16,7 +16,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // ✅ fixed wildcard
+// app.options("*", cors(corsOptions)); // ✅ fixed wildcard
 
 app.use(express.json());
 
