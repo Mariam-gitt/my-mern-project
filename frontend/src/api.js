@@ -11,7 +11,7 @@ import axios from "axios";
 
 const api = axios.create({
     // Replace this string with your actual live Vercel URL
-    baseURL: "https://my-mern-project-backend-qxjzxcdjd-mariam-s-projects11.vercel.app/api"
+    baseURL: "https://my-mern-project-backend.vercel.app/api"
 });
 
 /**
