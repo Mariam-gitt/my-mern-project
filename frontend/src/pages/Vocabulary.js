@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api";
-import Navbar from "../components/Navbar";
+import AppLayout from "../components/AppLayout";
 import WordList from "../components/WordList";
 
 function Vocabulary() {
@@ -21,9 +21,7 @@ function Vocabulary() {
     const reviewCount = words.length - learnedCount;
 
     return (
-        <div className="app-layout">
-            <Navbar />
-            <div className="main-content">
+        <AppLayout statusCount={words.length}>
                 <div className="page-container">
                     <div className="page-header">
                         <h1>My Words</h1>
@@ -53,8 +51,7 @@ function Vocabulary() {
                         <WordList words={words} onStatusChange={fetchWords} />
                     )}
                 </div>
-            </div>
-        </div>
+        </AppLayout>
     );
 }
 

@@ -1,27 +1,22 @@
-
-
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import API from "../api";
 import { useNavigate } from "react-router-dom";
-import api from "../api";
+import YarnBallLogo from "../components/YarnBallLogo";
+import { applyTheme } from "../hooks/useTheme";
 
-function Register() {
-    // --- YOUR ORIGINAL LOGIC PRESERVED ---
+export default function Register() {
+    const navigate = useNavigate();
+    useEffect(() => { applyTheme(localStorage.getItem("wk-theme") || "gazette"); }, []);
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const navigate = useNavigate();
 
-    // --- NEW UI STATE ---
-    const [sidebarOpen, setSidebarOpen] = useState(true);
-
-    const handleRegister = async (e) => {
-        e.preventDefault();
+    const handleRegister = async () => {
         setLoading(true); setError("");
         try {
-            await api.post("/auth/register", { name, email, password });
+            await API.post("/auth/register", { name, email, password });
             navigate("/");
         } catch {
             setError("Registration failed. Please try again.");
@@ -29,56 +24,34 @@ function Register() {
     };
 
     return (
-        <div className="flex h-screen w-full bg-[#FDFBF7]">
-            {/* Moveable Sidebar (Static on Auth) */}
-            <aside className={`${sidebarOpen ? "w-64" : "w-16"} bg-[#FDFBF7] border-r-2 border-black transition-all duration-300 flex flex-col`}>
-                <button 
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
-                    className="p-4 text-left font-mono text-xs font-bold border-b border-black hover:bg-[#F5C754]"
-                >
-                    {sidebarOpen ? "« CLOSE" : "»"}
-                </button>
-            </aside>
+        <div className="auth-page">
+            <div className="auth-card">
+                <div className="auth-brand">
+                    <div className="auth-brand-logo">
+                        <YarnBallLogo size={36} />
+                    </div>
+                    <div className="auth-brand-name">WordKnit.</div>
+                    <div className="auth-brand-sub">Create your vocabulary companion</div>
+                </div>
 
-            {/* Main Content */}
-            <main className="flex-1 flex items-center justify-center p-6">
-                <form onSubmit={handleRegister} className="w-full max-w-sm border-2 border-black p-8 bg-white">
-                    <h1 className="text-2xl font-bold mb-6">Create Account</h1>
-                    
-                    {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
-                    
-                    <input 
-                        placeholder="Name" 
-                        className="w-full border border-black p-2 mb-4"
-                        onChange={(e) => setName(e.target.value)}
-                        required
-                    />
-                    <input 
-                        type="email" 
-                        placeholder="Email" 
-                        className="w-full border border-black p-2 mb-4"
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
-                    <input 
-                        type="password" 
-                        placeholder="Password" 
-                        className="w-full border border-black p-2 mb-6"
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                    />
-                    
-                    <button 
-                        type="submit" 
-                        className="w-full bg-[#F5C754] border-2 border-black p-2 font-bold hover:bg-[#e0b54b]" 
-                        disabled={loading}
-                    >
-                        {loading ? "Knitting account..." : "Register"}
-                    </button>
-                </form>
-            </main>
+                <div className="input-group">
+                    <input placeholder="Your name" onChange={e => setName(e.target.value)}/>
+                    <input type="email" placeholder="Email address" onChange={e => setEmail(e.target.value)}/>
+                    <input type="password" placeholder="Password"
+                        onChange={e => setPassword(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && handleRegister()}/>
+                </div>
+
+                {error && <p className="auth-error">{error}</p>}
+
+                <button className="btn btn-primary" onClick={handleRegister} disabled={loading}>
+                    {loading ? "Creating..." : "Create Account"}
+                </button>
+
+                <p className="auth-link">
+                    Already have an account? <span onClick={() => navigate("/")}>Sign in</span>
+                </p>
+            </div>
         </div>
     );
 }
-
-export default Register;

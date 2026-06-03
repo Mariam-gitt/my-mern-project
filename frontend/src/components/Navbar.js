@@ -1,14 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
-
-const LINKS = [
-    { path: "/dashboard",  icon: "⌂", label: "Dashboard" },
-    { path: "/vocabulary", icon: "≡", label: "My Words" },
-    { path: "/reader",     icon: "◎", label: "PDF Reader" },
-    { path: "/flashcards", icon: "▣", label: "Flashcards" },
-    { path: "/quiz",       icon: "◈", label: "Quiz" },
-    { path: "/ocr",        icon: "⊙", label: "Scan" },
-];
+import { useTheme } from "../hooks/useTheme";
+import { NAV_LINKS } from "../navLinks";
 
 const BookIcon = ({ theme }) => (
     <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
@@ -35,12 +27,9 @@ const BookIcon = ({ theme }) => (
 function Navbar() {
     const navigate = useNavigate();
     const location = useLocation();
-    const [theme, setTheme] = useState(() => localStorage.getItem("wk-theme") || "crimson");
+    const { theme, setTheme, isGazette } = useTheme();
 
-    useEffect(() => {
-        document.documentElement.setAttribute("data-theme", theme);
-        localStorage.setItem("wk-theme", theme);
-    }, [theme]);
+    if (isGazette) return null;
 
     return (
         <aside className="sidebar">
@@ -53,7 +42,7 @@ function Navbar() {
             </div>
 
             <nav className="sidebar-nav">
-                {LINKS.map(link => (
+                {NAV_LINKS.map(link => (
                     <div key={link.path}
                         className={`sidebar-link ${location.pathname === link.path ? "active" : ""}`}
                         onClick={() => navigate(link.path)}>
@@ -78,6 +67,12 @@ function Navbar() {
                             onClick={() => setTheme("golden")}
                             title="Golden Sky">
                             ☀️
+                        </button>
+                        <button
+                            className={`theme-pill-btn ${theme === "gazette" ? "active" : ""}`}
+                            onClick={() => setTheme("gazette")}
+                            title="Lexical Gazette">
+                            📰
                         </button>
                     </div>
                 </div>
