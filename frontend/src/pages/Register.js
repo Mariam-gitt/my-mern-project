@@ -1,20 +1,27 @@
-import { useState, useEffect } from "react";
-import API from "../api";
-import { useNavigate } from "react-router-dom";
 
-export default function Register() {
-    const navigate = useNavigate();
-    useEffect(() => { const s = localStorage.getItem("wk-theme") || "crimson"; document.documentElement.setAttribute("data-theme", s); }, []);
+
+
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../api";
+
+function Register() {
+    // --- YOUR ORIGINAL LOGIC PRESERVED ---
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const navigate = useNavigate();
 
-    const handleRegister = async () => {
+    // --- NEW UI STATE ---
+    const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    const handleRegister = async (e) => {
+        e.preventDefault();
         setLoading(true); setError("");
         try {
-            await API.post("/auth/register", { name, email, password });
+            await api.post("/auth/register", { name, email, password });
             navigate("/");
         } catch {
             setError("Registration failed. Please try again.");
@@ -22,43 +29,56 @@ export default function Register() {
     };
 
     return (
-        <div className="auth-page">
-            <div className="auth-card">
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "24px" }}>
-                    <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-                        <circle cx="16" cy="16" r="13" fill="#c0392b"/>
-                        <path d="M6,12 Q16,8 26,12" stroke="white" strokeWidth="1.2" fill="none" opacity="0.6"/>
-                        <path d="M5,16 Q16,11 27,16" stroke="white" strokeWidth="1.2" fill="none" opacity="0.8"/>
-                        <path d="M6,20 Q16,15 26,20" stroke="white" strokeWidth="1.2" fill="none" opacity="0.6"/>
-                        <path d="M10,6 Q14,16 10,26" stroke="white" strokeWidth="1.2" fill="none" opacity="0.5"/>
-                        <path d="M16,4 Q18,16 16,28" stroke="white" strokeWidth="1.2" fill="none" opacity="0.7"/>
-                        <path d="M22,6 Q18,16 22,26" stroke="white" strokeWidth="1.2" fill="none" opacity="0.5"/>
-                        <path d="M26,18 Q30,20 32,24" stroke="#c0392b" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-                    </svg>
-                    <span style={{ fontFamily: "Playfair Display, serif", fontSize: "1.5rem", fontWeight: 700, letterSpacing: "-0.5px" }}>WordKnit</span>
-                </div>
-
-                <h2 className="auth-brand-name" style={{ marginBottom: "4px", fontSize: "1.5rem" }}>Start reading smarter</h2>
-                <p className="auth-brand-sub" style={{ marginBottom: "24px" }}>Create your vocabulary companion</p>
-
-                <div className="input-group">
-                    <input placeholder="Your name" onChange={e => setName(e.target.value)}/>
-                    <input type="email" placeholder="Email address" onChange={e => setEmail(e.target.value)}/>
-                    <input type="password" placeholder="Password"
-                        onChange={e => setPassword(e.target.value)}
-                        onKeyDown={e => e.key === "Enter" && handleRegister()}/>
-                </div>
-
-                {error && <p style={{ color: "var(--red)", fontSize: "0.85rem", marginBottom: "12px" }}>{error}</p>}
-
-                <button className="btn btn-primary" onClick={handleRegister} disabled={loading}>
-                    {loading ? "Creating..." : "Create Account"}
+        <div className="flex h-screen w-full bg-[#FDFBF7]">
+            {/* Moveable Sidebar (Static on Auth) */}
+            <aside className={`${sidebarOpen ? "w-64" : "w-16"} bg-[#FDFBF7] border-r-2 border-black transition-all duration-300 flex flex-col`}>
+                <button 
+                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    className="p-4 text-left font-mono text-xs font-bold border-b border-black hover:bg-[#F5C754]"
+                >
+                    {sidebarOpen ? "« CLOSE" : "»"}
                 </button>
+            </aside>
 
-                <p className="auth-link">
-                    Already have an account? <span onClick={() => navigate("/")}>Sign in</span>
-                </p>
-            </div>
+            {/* Main Content */}
+            <main className="flex-1 flex items-center justify-center p-6">
+                <form onSubmit={handleRegister} className="w-full max-w-sm border-2 border-black p-8 bg-white">
+                    <h1 className="text-2xl font-bold mb-6">Create Account</h1>
+                    
+                    {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+                    
+                    <input 
+                        placeholder="Name" 
+                        className="w-full border border-black p-2 mb-4"
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                    />
+                    <input 
+                        type="email" 
+                        placeholder="Email" 
+                        className="w-full border border-black p-2 mb-4"
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
+                    <input 
+                        type="password" 
+                        placeholder="Password" 
+                        className="w-full border border-black p-2 mb-6"
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                    
+                    <button 
+                        type="submit" 
+                        className="w-full bg-[#F5C754] border-2 border-black p-2 font-bold hover:bg-[#e0b54b]" 
+                        disabled={loading}
+                    >
+                        {loading ? "Knitting account..." : "Register"}
+                    </button>
+                </form>
+            </main>
         </div>
     );
 }
+
+export default Register;
