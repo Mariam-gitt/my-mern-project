@@ -51,6 +51,8 @@ app.use("/api/contextual", require("./routes/contextualRoutes"));
 app.use("/api/ragl", require("./routes/ragLlmRoutes"));
 app.use("/api/ocr", require("./routes/ocrRoutes"));
 app.use("/api/profile", require("./routes/wordProfileRoutes"));
+app.use("/api/documents", require("./routes/documentRoutes"));
+app.use("/api/bookmarks", require("./routes/bookmarkRoutes"));
 
 if (process.env.NODE_ENV !== "production") {
     const PORT = process.env.PORT || 5000;
