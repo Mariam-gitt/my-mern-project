@@ -1,59 +1,15 @@
 const express  = require("express");
 const router   = express.Router();
 const multer   = require("multer");
-const axios    = require("axios");
 const protect  = require("../middleware/authMiddleware");
 const Word     = require("../models/Word");
+const Document = require("../models/Document");
 
-const upload = multer({ storage: multer.memoryStorage() });
-
-/* ─────────────────────────────────────────────────────────
-   POST /api/pdf/import
-   Send PDF to Python pdf_service → extract highlighted words
-────────────────────────────────────────────────────────── */
-router.post("/import", protect, upload.single("pdf"), async (req, res) => {
-    try {
-        if (!req.file) return res.status(400).json({ message: "No PDF file uploaded" });
-
-        const pythonRes = await axios.post(
-            "http://localhost:5001/extract",
-            req.file.buffer,
-            {
-                headers: { "Content-Type": "application/octet-stream", "Content-Length": req.file.buffer.length },
-                maxBodyLength: Infinity
-            }
-        );
-
-        const { words } = pythonRes.data;
-        if (!words || words.length === 0)
-            return res.status(200).json({ message: "No highlighted words found", added: [] });
-
-        const added = [], failed = [];
-
-        for (const word of words) {
-            try {
-                const exists = await Word.findOne({ userId: req.user, word });
-                if (exists) continue;
-
-                const dictRes = await axios.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-                const data    = dictRes.data?.[0];
-                const meaning = data?.meanings?.[0]?.definitions?.[0]?.definition || "No meaning found";
-                const example = data?.meanings?.[0]?.definitions?.[0]?.example   || "No example available";
-                const synonyms = data?.meanings?.[0]?.definitions?.[0]?.synonyms || [];
-
-                const newWord = await Word.create({ userId: req.user, word, meaning, exampleSentence: example, synonyms, status: "review" });
-                added.push(newWord);
-            } catch { failed.push(word); }
-        }
-
-        res.json({ message: `Added ${added.length} words from PDF`, added, failed });
-
-    } catch (error) {
-        console.log("PDF IMPORT ERROR:", error.message);
-        if (error.code === "ECONNREFUSED")
-            return res.status(500).json({ message: "PDF service not running. Start it with: python pdf_service.py" });
-        res.status(500).json({ message: "Failed to import PDF" });
-    }
+// 20MB cap on raw PDF uploads here — generous for text-based academic PDFs,
+// while still protecting the server from runaway memory use on huge scans.
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }
 });
 
 /* ─────────────────────────────────────────────────────────
@@ -110,7 +66,8 @@ const ACADEMIC_SUFFIXES = [
   "tion","sion","ment","ness","ity","ism","ist","ize","ise","ical","ive",
   "ous","ence","ance","ogy","phy","sis","tic","tude","ology","ography",
   "ometry","onomy","istic","ification","ization","isation","atorial",
-  "aneous","aneous","escent","iferous","ivorous","omorphic",
+  "aneous","escent","iferous","ivorous","omorphic","esque","itude","archy",
+  "cracy","logue","mania","phobia","scopy","trophy","valent","morphic",
 ];
 
 const ACADEMIC_PREFIXES = [
@@ -120,116 +77,215 @@ const ACADEMIC_PREFIXES = [
   "neo","neuro","non","omni","ortho","para","peri","photo","phys","poly",
   "post","pre","proto","pseudo","psycho","retro","semi","socio","stereo",
   "sub","super","supra","sym","syn","tele","theo","thermo","trans","ultra",
-  "uni","vaso",
+  "uni","vaso","ambi","dys","mal","pan","quasi","techno",
 ];
+
+/**
+ * Strip common inflections (plurals, -ed, -ing, -ly) so that e.g. "houses",
+ * "walked", "running", "quickly" map back to a base form before checking
+ * against EASY_WORDS — this stops everyday inflected words from slipping
+ * through as "difficult" just because their exact surface form isn't listed.
+ */
+function lemmatize(word) {
+    let w = word;
+    if (w.length > 6 && w.endsWith("ies"))      w = w.slice(0, -3) + "y";
+    else if (w.length > 5 && w.endsWith("ing")) w = w.slice(0, -3);
+    else if (w.length > 5 && w.endsWith("ied")) w = w.slice(0, -3) + "y";
+    else if (w.length > 4 && w.endsWith("ed"))  w = w.slice(0, -2);
+    else if (w.length > 4 && w.endsWith("es"))  w = w.slice(0, -2);
+    else if (w.length > 4 && w.endsWith("ly"))  w = w.slice(0, -2);
+    else if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) w = w.slice(0, -1);
+    return w;
+}
 
 function scoreDifficulty(word, freq, totalTokens) {
     let s = 0;
     const len = word.length;
 
-    // Length score
+    // Length score — still rewards long words, but no longer the only path to qualifying
     if (len >= 6)  s += 1;
     if (len >= 8)  s += 2;
     if (len >= 10) s += 3;
     if (len >= 13) s += 2;
 
-    // Academic suffix — strongest signal
+    // Academic suffix — strongest signal, works even on short words (e.g. "tacit", "wry" won't
+    // match this, but "terse", "inert", "fervid" style words get caught via rarity instead)
     if (ACADEMIC_SUFFIXES.some(sx => word.endsWith(sx))) s += 5;
 
     // Academic prefix — good signal
     if (ACADEMIC_PREFIXES.some(px => word.startsWith(px))) s += 3;
 
-    // Rarity bonus (infrequent in this specific text → less familiar)
+    // Rarity bonus (infrequent in this specific text → less familiar).
+    // This is what lets genuinely hard SHORT words (no length/affix signal)
+    // still qualify as difficult, since rarity alone can push them over the bar.
     const relFreq = freq / totalTokens;
     if (relFreq < 0.0002) s += 4;
     else if (relFreq < 0.001) s += 2;
     else if (relFreq < 0.003) s += 1;
 
+    // Consonant cluster bonus — words with unusual consonant clustering
+    // (rhythm, glyph, sphinx) tend to be harder regardless of length
+    if (/[bcdfghjklmnpqrstvwxyz]{4,}/.test(word)) s += 1;
+
     return s;
 }
 
+/**
+ * Core difficulty-analysis pipeline. Takes a raw PDF buffer + the user's
+ * known-word set, returns the same shape both routes below respond with.
+ * Shared so the multipart upload route and the saved-document route don't
+ * duplicate the scoring logic.
+ */
+async function analyzeBuffer(buf, knownSet) {
+    const magic = buf.slice(0, 4).toString("ascii");
+    if (magic !== "%PDF") {
+        return { error: "That doesn't look like a PDF file. Please upload a .pdf document." };
+    }
+
+    let pdfParse;
+    try { pdfParse = require("pdf-parse"); }
+    catch { return { error: "pdf-parse not installed. Run: cd backend && npm install pdf-parse" }; }
+
+    // Cap how many pages get parsed for very large documents — keeps the
+    // request fast and avoids spiking memory on huge scanned-text PDFs.
+    const MAX_PAGES = 150;
+
+    let pdfData;
+    try { pdfData = await pdfParse(buf, { max: MAX_PAGES }); }
+    catch (e) {
+        console.log("pdf-parse error:", e.message);
+        return { error: "Could not parse this PDF. It may be password-protected or corrupted." };
+    }
+
+    const rawText = pdfData.text || "";
+    if (rawText.trim().length < 100) {
+        return { error: "This PDF has no extractable text — it may be a scanned image. Try a PDF with selectable text." };
+    }
+
+    const truncatedByPages = (pdfData.numpages || 0) > MAX_PAGES;
+
+    // Tokenise — capture all lowercase words ≥ 4 chars
+    let allTokens = rawText.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
+
+    // Backstop token cap — protects against pathological cases (e.g. a
+    // single page packed with dense text) even when the page cap above
+    // doesn't kick in. ~120k tokens is comfortably more than a 150-page
+    // academic PDF would realistically produce.
+    const MAX_TOKENS = 120000;
+    const truncatedByTokens = allTokens.length > MAX_TOKENS;
+    if (truncatedByTokens) allTokens = allTokens.slice(0, MAX_TOKENS);
+
+    const totalTokens = allTokens.length;
+    const truncated = truncatedByPages || truncatedByTokens;
+
+    if (totalTokens < 30) {
+        return { error: "Not enough text found in this PDF to analyse." };
+    }
+
+    // Build frequency map
+    const freqMap = {};
+    for (const tok of allTokens) {
+        freqMap[tok] = (freqMap[tok] || 0) + 1;
+    }
+
+    // Score and rank — uses the lemmatized form to check against EASY_WORDS/known
+    // vocab (so "houses" is recognised as "house"), but keeps the original surface
+    // form for scoring/display, since the inflected form is what the reader saw.
+    const scored = Object.entries(freqMap)
+        .filter(([word]) => {
+            const lemma = lemmatize(word);
+            return word.length >= 4              &&   // at least 4 chars (was 5 — short hard words now count)
+                   !EASY_WORDS.has(word)          &&   // not a common easy word (surface form)
+                   !EASY_WORDS.has(lemma)         &&   // ...or its base form
+                   !knownSet.has(lemma)           &&   // not already in user's vocab
+                   /^[a-z]+$/.test(word);                // pure alpha only (no numbers/hyphens)
+        })
+        .map(([word, freq]) => ({
+            word,
+            freq,
+            score: scoreDifficulty(word, freq, totalTokens)
+        }))
+        .filter(w => w.score >= 4)        // minimum difficulty bar
+        .sort((a, b) => b.score - a.score || a.freq - b.freq)
+        .slice(0, 50);
+
+    const words = scored.map(w => w.word);
+
+    console.log(`[Difficulty] ${totalTokens} tokens → ${Object.keys(freqMap).length} unique → ${words.length} difficult${truncated ? " (truncated)" : ""}`);
+
+    return {
+        words,
+        total: words.length,
+        truncated,
+        pdfStats: {
+            pages: pdfData.numpages || 0,
+            pagesAnalyzed: truncatedByPages ? MAX_PAGES : (pdfData.numpages || 0),
+            totalTokens,
+            uniqueWords: Object.keys(freqMap).length,
+        }
+    };
+}
+
+/* ─────────────────────────────────────────────────────────
+   POST /api/pdf/analyze-difficulty
+   Extract hard vocabulary words from an uploaded PDF file
+   (used by the Dashboard's standalone "Upload PDF" button).
+────────────────────────────────────────────────────────── */
 router.post("/analyze-difficulty", protect, upload.single("pdf"), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ message: "No PDF file provided" });
 
-        // Validate it's actually a PDF by checking magic bytes
-        const buf = req.file.buffer;
-        const magic = buf.slice(0, 4).toString("ascii");
-        if (magic !== "%PDF") {
-            return res.status(400).json({ message: "That doesn't look like a PDF file. Please upload a .pdf document." });
-        }
-
-        let pdfParse;
-        try { pdfParse = require("pdf-parse"); }
-        catch { return res.status(500).json({ message: "pdf-parse not installed. Run: cd backend && npm install pdf-parse" }); }
-
-        let pdfData;
-        try { pdfData = await pdfParse(buf); }
-        catch (e) {
-            console.log("pdf-parse error:", e.message);
-            return res.status(400).json({ message: "Could not parse this PDF. It may be password-protected or corrupted." });
-        }
-
-        const rawText = pdfData.text || "";
-        if (rawText.trim().length < 100) {
-            return res.status(400).json({
-                message: "This PDF has no extractable text — it may be a scanned image. Try a PDF with selectable text."
-            });
-        }
-
-        // Tokenise — capture all lowercase words ≥ 4 chars
-        const allTokens = rawText.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
-        const totalTokens = allTokens.length;
-
-        if (totalTokens < 30) {
-            return res.status(400).json({ message: "Not enough text found in this PDF to analyse." });
-        }
-
-        // Build frequency map
-        const freqMap = {};
-        for (const tok of allTokens) {
-            freqMap[tok] = (freqMap[tok] || 0) + 1;
-        }
-
-        // Fetch user's known words
         const existingWords = await Word.find({ userId: req.user }, "word").lean();
-        const knownSet = new Set(existingWords.map(w => w.word.toLowerCase()));
+        const knownSet = new Set(existingWords.map(w => lemmatize(w.word.toLowerCase())));
 
-        // Score and rank
-        const scored = Object.entries(freqMap)
-            .filter(([word]) =>
-                word.length >= 5         &&   // at least 5 chars
-                !EASY_WORDS.has(word)    &&   // not a common easy word
-                !knownSet.has(word)      &&   // not already in user's vocab
-                /^[a-z]+$/.test(word)         // pure alpha only (no numbers/hyphens)
-            )
-            .map(([word, freq]) => ({
-                word,
-                freq,
-                score: scoreDifficulty(word, freq, totalTokens)
-            }))
-            .filter(w => w.score >= 4)        // minimum difficulty bar (lowered from 5)
-            .sort((a, b) => b.score - a.score || a.freq - b.freq)
-            .slice(0, 50);
+        const result = await analyzeBuffer(req.file.buffer, knownSet);
+        if (result.error) return res.status(400).json({ message: result.error });
 
-        const words = scored.map(w => w.word);
-
-        console.log(`[Difficulty] ${totalTokens} tokens → ${Object.keys(freqMap).length} unique → ${words.length} difficult`);
-
-        res.json({
-            words,
-            total: words.length,
-            pdfStats: {
-                pages:       pdfData.numpages || 0,
-                totalTokens,
-                uniqueWords: Object.keys(freqMap).length,
-            }
-        });
+        res.json(result);
 
     } catch (err) {
         console.log("ANALYZE-DIFFICULTY ERROR:", err.message);
         res.status(500).json({ message: `Analysis failed: ${err.message}` });
     }
+});
+
+/* ─────────────────────────────────────────────────────────
+   GET /api/pdf/analyze-difficulty/:documentId
+   Same analysis, but run on a PDF already saved in the user's
+   library — used by the PDF Reader sidebar so there's no need
+   to re-upload the file you already have open.
+────────────────────────────────────────────────────────── */
+router.get("/analyze-difficulty/:documentId", protect, async (req, res) => {
+    try {
+        const doc = await Document.findOne({ _id: req.params.documentId, userId: req.user });
+        if (!doc) return res.status(404).json({ message: "PDF not found in your library" });
+
+        const buf = Buffer.from(doc.fileData, "base64");
+
+        const existingWords = await Word.find({ userId: req.user }, "word").lean();
+        const knownSet = new Set(existingWords.map(w => lemmatize(w.word.toLowerCase())));
+
+        const result = await analyzeBuffer(buf, knownSet);
+        if (result.error) return res.status(400).json({ message: result.error });
+
+        res.json(result);
+
+    } catch (err) {
+        console.log("ANALYZE-DIFFICULTY (saved doc) ERROR:", err.message);
+        res.status(500).json({ message: `Analysis failed: ${err.message}` });
+    }
+});
+
+/* ─────────────────────────────────────────────────────────
+   Multer error handler — catches "file too large" from either
+   route above and returns a clear message instead of a generic
+   500/crash. Must come after the routes that use `upload`.
+────────────────────────────────────────────────────────── */
+router.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ message: "PDF is too large. Please upload a file under 20MB." });
+    }
+    next(err);
 });
 
 // ← single export, at the very end

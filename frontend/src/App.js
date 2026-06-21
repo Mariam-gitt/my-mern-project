@@ -8,7 +8,6 @@ import Flashcards from "./pages/Flashcards";
 import Quiz from "./pages/Quiz";
 import Vocabulary from "./pages/Vocabulary";
 import PDFReader from "./pages/PDFReader";
-import OCR from "./pages/OCR";
 import WordProfile from "./pages/WordProfile";
 
 function ProtectedRoute({ children }) {
@@ -28,7 +27,6 @@ export default function App() {
                 <Route path="/quiz" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
                 <Route path="/vocabulary" element={<ProtectedRoute><Vocabulary /></ProtectedRoute>} />
                 <Route path="/reader" element={<ProtectedRoute><PDFReader /></ProtectedRoute>} />
-                <Route path="/ocr" element={<ProtectedRoute><OCR /></ProtectedRoute>} />
                 <Route path="/profile/:word" element={<ProtectedRoute><WordProfile /></ProtectedRoute>} />
             </Routes>
         </BrowserRouter>

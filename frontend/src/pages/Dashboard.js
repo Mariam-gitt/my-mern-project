@@ -5,10 +5,6 @@ import AddWord from "../components/AddWord";
 
 function Dashboard() {
     const [words, setWords]                   = useState([]);
-    const [importing, setImporting]           = useState(false);
-    const [importMsg, setImportMsg]           = useState("");
-    const [ragStatus, setRagStatus]           = useState(null);
-    const [ingestingDict, setIngestingDict]   = useState(false);
     const [newWordProfile, setNewWordProfile] = useState(null);
     const [loadingProfile, setLoadingProfile] = useState(false);
     const [diffWords, setDiffWords]           = useState([]);
@@ -16,14 +12,12 @@ function Dashboard() {
     const [diffAdded, setDiffAdded]           = useState(new Set());
     const [diffMsg, setDiffMsg]               = useState("");
     const [diffStats, setDiffStats]           = useState(null);
+    const [diffTruncated, setDiffTruncated]   = useState(false);
 
-    const pdfRef  = useRef();
     const diffRef = useRef();
-    const dictRef = useRef();
 
-    const fetchWords     = async () => { try { const r = await api.get("/words"); setWords(r.data); } catch {} };
-    const fetchRagStatus = async () => { try { const r = await api.get("/rag/status"); setRagStatus(r.data); } catch {} };
-    useEffect(() => { fetchWords(); fetchRagStatus(); }, []);
+    const fetchWords = async () => { try { const r = await api.get("/words"); setWords(r.data); } catch {} };
+    useEffect(() => { fetchWords(); }, []);
 
     const handleWordAdded = async (word) => {
         fetchWords();
@@ -32,23 +26,16 @@ function Dashboard() {
         catch {} finally { setLoadingProfile(false); }
     };
 
-    const handlePDFImport = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        setImporting(true); setImportMsg("");
-        const fd = new FormData(); fd.append("pdf", file);
-        try {
-            const r = await api.post("/pdf/import", fd, { headers: { "Content-Type": "multipart/form-data" } });
-            setImportMsg({ type: "success", text: `✓ ${r.data.message}` }); fetchWords();
-        } catch (err) {
-            setImportMsg({ type: "error", text: `✗ ${err.response?.data?.message || "Import failed"}` });
-        } finally { setImporting(false); pdfRef.current.value = ""; }
-    };
-
     const handleDifficultyAnalyze = async (e) => {
         const file = e.target.files[0]; if (!file) return;
+        if (file.size > 20 * 1024 * 1024) {
+            setDiffMsg("PDF is too large. Please upload a file under 20MB.");
+            diffRef.current.value = "";
+            return;
+        }
         setDiffAnalyzing(true);
         setDiffWords([]); setDiffAdded(new Set());
-        setDiffMsg(""); setDiffStats(null);
+        setDiffMsg(""); setDiffStats(null); setDiffTruncated(false);
         const fd = new FormData(); fd.append("pdf", file);
         try {
             const r = await api.post("/pdf/analyze-difficulty", fd, {
@@ -57,6 +44,7 @@ function Dashboard() {
             const found = r.data.words || [];
             setDiffWords(found);
             setDiffStats(r.data.pdfStats || null);
+            setDiffTruncated(!!r.data.truncated);
             if (!found.length) setDiffMsg("No difficult words found — try a longer academic PDF.");
         } catch (err) {
             setDiffMsg(err.response?.data?.message || "Analysis failed. Make sure the PDF has selectable text (not a scanned image).");
@@ -79,18 +67,6 @@ function Dashboard() {
         for (const w of diffWords) {
             if (!diffAdded.has(w)) await addDifficultWord(w);
         }
-    };
-
-    const handleDictUpload = async (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        setIngestingDict(true);
-        const fd = new FormData(); fd.append("pdf", file);
-        try {
-            const r = await api.post("/rag/ingest", fd, { headers: { "Content-Type": "multipart/form-data" } });
-            setImportMsg({ type: "success", text: `✓ ${r.data.message}` }); fetchRagStatus();
-        } catch (err) {
-            setImportMsg({ type: "error", text: `✗ ${err.response?.data?.message || "Failed"}` });
-        } finally { setIngestingDict(false); dictRef.current.value = ""; }
     };
 
     const learnedCount = words.filter(w => w.status === "learned").length;
@@ -118,21 +94,7 @@ function Dashboard() {
                             <div className="stat-number">{words.length - learnedCount}</div>
                             <div className="stat-label">To Review</div>
                         </div>
-                        <div className="stat-card clickable" onClick={() => pdfRef.current.click()}>
-                            <div className="stat-number" style={{ fontSize: "1.4rem" }}>{importing ? "…" : "+"}</div>
-                            <div className="stat-label">{importing ? "Importing…" : "Import PDF"}</div>
-                            <input ref={pdfRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={handlePDFImport} />
-                        </div>
-                        <div className="stat-card clickable" onClick={() => dictRef.current.click()}>
-                            <div className="stat-number" style={{ fontSize: "1.4rem" }}>{ingestingDict ? "…" : "⊕"}</div>
-                            <div className="stat-label">{ingestingDict ? "Loading…" : ragStatus?.words_loaded > 0 ? `${ragStatus.words_loaded} dict` : "Load Dict"}</div>
-                            <input ref={dictRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={handleDictUpload} />
-                        </div>
                     </div>
-
-                    {importMsg && (
-                        <div className={`import-msg ${importMsg.type}`}>{importMsg.text}</div>
-                    )}
 
                     <AddWord onWordAdded={handleWordAdded} />
 
@@ -184,6 +146,11 @@ function Dashboard() {
                                             <p style={{ fontSize: "0.72rem", color: "var(--text-3)", marginTop: "3px" }}>
                                                 {diffStats.pages > 0 ? `${diffStats.pages} pages · ` : ""}
                                                 {diffStats.totalTokens?.toLocaleString()} tokens · {diffStats.uniqueWords?.toLocaleString()} unique words scanned
+                                            </p>
+                                        )}
+                                        {diffTruncated && diffStats && (
+                                            <p style={{ fontSize: "0.72rem", color: "var(--accent)", marginTop: "3px" }}>
+                                                ⚠ Large PDF — only analyzed the first {diffStats.pagesAnalyzed} of {diffStats.pages} pages
                                             </p>
                                         )}
                                     </div>

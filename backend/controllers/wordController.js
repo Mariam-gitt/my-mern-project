@@ -91,6 +91,62 @@ exports.getWords = async (req, res) => {
 
 
 /**
+ * Ask Groq for 3 plausible-but-wrong meanings of `word`, written in the
+ * same style/length as a real dictionary definition, each with a short
+ * reason why it's wrong. Falls back to null on any failure so the caller
+ * can use the old same-vocab-list method instead.
+ */
+const generateSimilarDecoys = async (word, correctMeaning) => {
+    if (!process.env.GROQ_API_KEY) return null;
+
+    const prompt = `You are building a vocabulary quiz. The word is "${word}" and its correct meaning is:
+"${correctMeaning}"
+
+Write 3 INCORRECT but PLAUSIBLE dictionary-style definitions for "${word}" — the kind of wrong answers that would actually trick someone who half-remembers the word. Match the length and tone of the correct meaning. Do not just negate the correct meaning; invent a different, believable concept.
+
+For each wrong option, also give a short reason (max 16 words) explaining why it's wrong — ideally by naming what real word or concept that wrong meaning actually belongs to.
+
+Respond in this exact JSON format, nothing else:
+{
+  "wrongOptions": [
+    { "meaning": "...", "reason": "..." },
+    { "meaning": "...", "reason": "..." },
+    { "meaning": "...", "reason": "..." }
+  ]
+}`;
+
+    try {
+        const groqRes = await axios.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            {
+                model: "llama-3.3-70b-versatile",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.8,
+                max_tokens: 400
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+                    "Content-Type": "application/json"
+                },
+                timeout: 12000
+            }
+        );
+
+        const content = groqRes.data.choices[0].message.content.trim();
+        const cleaned = content.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+
+        if (!Array.isArray(parsed.wrongOptions) || parsed.wrongOptions.length < 3) return null;
+        return parsed.wrongOptions.slice(0, 3);
+
+    } catch (err) {
+        console.log("QUIZ DECOY GENERATION FAILED:", err.response?.data || err.message);
+        return null;
+    }
+};
+
+/**
  * GENERATE QUIZ
  */
 exports.getQuiz = async (req, res) => {
@@ -105,14 +161,39 @@ exports.getQuiz = async (req, res) => {
         const correctWord = words[randomIndex];
         const correctAnswer = correctWord.meaning;
 
-        const wrongAnswers = words
-            .filter(w => w._id.toString() !== correctWord._id.toString())
-            .slice(0, 3)
-            .map(w => w.meaning);
+        // ── Try AI-generated similar-meaning decoys first ──
+        const aiDecoys = await generateSimilarDecoys(correctWord.word, correctAnswer);
 
-        const options = [correctAnswer, ...wrongAnswers].sort(() => Math.random() - 0.5);
+        let options, reasons;
 
-        res.json({ word: correctWord.word, correctAnswer, options });
+        if (aiDecoys) {
+            options = [correctAnswer, ...aiDecoys.map(d => d.meaning)];
+            reasons = {};
+            aiDecoys.forEach(d => { reasons[d.meaning] = d.reason; });
+        } else {
+            // ── Fallback: random other words from the user's own vocab ──
+            const others = words.filter(w => w._id.toString() !== correctWord._id.toString());
+            const shuffled = others.sort(() => Math.random() - 0.5).slice(0, 3);
+            options = [correctAnswer, ...shuffled.map(w => w.meaning)];
+            reasons = {};
+            shuffled.forEach(w => {
+                reasons[w.meaning] = `This is actually the meaning of "${w.word}", not "${correctWord.word}".`;
+            });
+        }
+
+        // Shuffle final option order so correct answer isn't always first
+        const shuffledOptions = options
+            .map(opt => ({ opt, sort: Math.random() }))
+            .sort((a, b) => a.sort - b.sort)
+            .map(o => o.opt);
+
+        res.json({
+            word: correctWord.word,
+            correctAnswer,
+            options: shuffledOptions,
+            reasons,          // { wrongMeaning: "why it's wrong" } — correctAnswer has no entry
+            source: aiDecoys ? "ai" : "vocab"
+        });
 
     } catch (error) {
         console.log("QUIZ ERROR:", error.message);

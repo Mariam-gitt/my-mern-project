@@ -105,21 +105,28 @@ function Quiz() {
 
                             <div className="quiz-options">
                                 {quiz.options.map((opt, i) => (
-                                    <button key={i}
-                                        className={getClass(opt)}
-                                        onClick={() => checkAnswer(opt)}
-                                        disabled={answered}>
-                                        <span style={{
-                                            display: "inline-block",
-                                            width: "22px",
-                                            fontWeight: 700,
-                                            color: "var(--text-3)",
-                                            flexShrink: 0
-                                        }}>
-                                            {["A", "B", "C", "D"][i]}.
-                                        </span>
-                                        {opt}
-                                    </button>
+                                    <div key={i}>
+                                        <button
+                                            className={getClass(opt)}
+                                            onClick={() => checkAnswer(opt)}
+                                            disabled={answered}>
+                                            <span style={{
+                                                display: "inline-block",
+                                                width: "22px",
+                                                fontWeight: 700,
+                                                color: "var(--text-3)",
+                                                flexShrink: 0
+                                            }}>
+                                                {["A", "B", "C", "D"][i]}.
+                                            </span>
+                                            {opt}
+                                        </button>
+                                        {answered && opt !== quiz.correctAnswer && quiz.reasons?.[opt] && (
+                                            <p className="quiz-option-reason">
+                                                ↳ {quiz.reasons[opt]}
+                                            </p>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
 
@@ -151,7 +158,7 @@ function Quiz() {
                                         </p>
                                         {selected !== quiz.correctAnswer && (
                                             <p style={{ fontSize: "0.82rem", color: "var(--text-2)", marginTop: "3px" }}>
-                                                Answer: {quiz.correctAnswer}
+                                                Correct meaning: {quiz.correctAnswer}
                                             </p>
                                         )}
                                         {streak > 1 && selected === quiz.correctAnswer && (

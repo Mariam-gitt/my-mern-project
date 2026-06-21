@@ -16,10 +16,13 @@ export default function Register() {
     const handleRegister = async () => {
         setLoading(true); setError("");
         try {
-            await API.post("/auth/register", { name, email, password });
-            navigate("/");
-        } catch {
-            setError("Registration failed. Please try again.");
+            const res = await API.post("/auth/register", { name, email, password });
+            // Backend now issues a token on register too — log straight in
+            // instead of bouncing back to the login page.
+            localStorage.setItem("token", res.data.token);
+            navigate("/dashboard");
+        } catch (err) {
+            setError(err.response?.data?.message || "Registration failed. Please try again.");
         } finally { setLoading(false); }
     };
 

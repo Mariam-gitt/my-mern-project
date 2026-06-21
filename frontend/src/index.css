@@ -1405,6 +1405,14 @@ input:focus {
 .quiz-option.wrong { background: var(--accent-bg); color: var(--accent); }
 .quiz-option:disabled { cursor: default; }
 
+.quiz-option-reason {
+  font-size: 0.74rem;
+  color: var(--text-3);
+  font-style: italic;
+  padding: 4px 16px 10px 42px;
+  line-height: 1.5;
+}
+
 /* ══════════════════════════════════
    OCR PAGE
 ══════════════════════════════════ */
@@ -1792,6 +1800,60 @@ input:focus {
   line-height: 1;
 }
 .reader-bookmark-delete:hover { color: var(--accent); }
+
+/* ── DIFFICULT WORDS (sidebar) ── */
+.reader-difficulty-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reader-difficulty-empty {
+  padding: 10px 2px;
+  text-align: center;
+}
+.reader-difficulty-empty p {
+  font-size: 0.74rem;
+  color: var(--text-3);
+  line-height: 1.6;
+}
+
+.reader-difficulty-hint {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  line-height: 1.5;
+  padding: 6px 2px;
+}
+
+.reader-difficulty-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.reader-difficulty-chip:hover { border-color: var(--accent); background: var(--accent-bg); }
+.reader-difficulty-chip.added {
+  color: var(--text-3);
+  text-decoration: line-through;
+  cursor: default;
+  background: var(--bg);
+}
+.reader-difficulty-chip span {
+  font-weight: 700;
+  font-size: 0.7rem;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.reader-difficulty-chip.added span { color: var(--green); text-decoration: none; }
 
 .reader-right { overflow-y: auto; padding: 22px; background: var(--card); }
 
