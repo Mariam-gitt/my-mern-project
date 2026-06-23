@@ -13,7 +13,8 @@ function WordProfile() {
     const [loading, setLoading]       = useState(true);
     const [error, setError]           = useState("");
     const [activeTab, setActiveTab]   = useState("overview");
-    const [deleting, setDeleting]     = useState(false);
+    const [deleting, setDeleting]           = useState(false);
+    const [deletingAccount, setDeletingAccount] = useState(false);
     const [wordInVocab, setWordInVocab] = useState(null);
 
     useEffect(() => { fetchAll(); }, [word]);
@@ -63,6 +64,25 @@ function WordProfile() {
         } catch {
             alert("Failed to delete word.");
             setDeleting(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        const confirmed = window.confirm(
+            "⚠ Delete your account?\n\nThis will permanently remove your account, all saved words, all PDFs, and all bookmarks. This cannot be undone."
+        );
+        if (!confirmed) return;
+        const doubleConfirm = window.confirm("Are you absolutely sure? All your data will be gone forever.");
+        if (!doubleConfirm) return;
+
+        setDeletingAccount(true);
+        try {
+            await api.delete("/auth/account");
+            localStorage.removeItem("token");
+            navigate("/");
+        } catch {
+            alert("Failed to delete account. Please try again.");
+            setDeletingAccount(false);
         }
     };
 
@@ -338,6 +358,20 @@ function WordProfile() {
                                             </a>
                                         ))}
                                     </div>
+                                </div>
+
+                                <div className="danger-zone">
+                                    <p className="danger-zone-title">⚠ Danger Zone</p>
+                                    <p className="danger-zone-desc">
+                                        Permanently delete your account and all associated data — words, PDFs, bookmarks. This cannot be undone.
+                                    </p>
+                                    <button
+                                        className="btn-danger"
+                                        onClick={handleDeleteAccount}
+                                        disabled={deletingAccount}
+                                    >
+                                        {deletingAccount ? "Deleting…" : "Delete My Account"}
+                                    </button>
                                 </div>
                             </div>
                         )}

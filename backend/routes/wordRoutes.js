@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const { getWords, addWord, getQuiz, updateStatus } = require("../controllers/wordController");
+const { getWords, addWord, getQuiz, updateStatus, updateNote } = require("../controllers/wordController");
 const protect = require("../middleware/authMiddleware");
 
 router.post("/", protect, addWord);
 router.get("/", protect, getWords);
 router.get("/quiz", protect, getQuiz);
 router.patch("/:id/status", protect, updateStatus);
+router.patch("/:id/note", protect, updateNote);
 
 module.exports = router;
 

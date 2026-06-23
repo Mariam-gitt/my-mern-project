@@ -76,6 +76,12 @@ const wordSchema = new mongoose.Schema({
     // Flashcard review tracking
     lastReviewed: {
         type: Date
+    },
+
+    // User's personal note for this word
+    note: {
+        type: String,
+        default: ""
     }
 
 },

@@ -5,7 +5,18 @@ import AppLayout from "../components/AppLayout";
 const MIN_ZOOM = 50;
 const MAX_ZOOM = 250;
 const ZOOM_STEP = 10;
-const BOOKMARK_WORD_THRESHOLD = 3; // selections longer than this become bookmarks, not word lookups
+const BOOKMARK_WORD_THRESHOLD = 3;
+
+// Deterministic spine colors for the bookshelf — picked to look like real book covers
+const BOOK_COLORS = [
+    "#7b3f00", "#1a237e", "#1b5e20", "#880e4f", "#4a148c",
+    "#bf360c", "#006064", "#33691e", "#1565c0", "#4e342e",
+    "#37474f", "#6a1b9a", "#558b2f", "#c62828", "#00695c",
+];
+
+// Page render cache: stores resolved {canvas, textContent} per page number
+// so flipping back to a visited page is instant (no re-render to pdf.js).
+const pageCache = {};
 
 function PDFReader() {
     const canvasRef = useRef(null);
@@ -198,8 +209,33 @@ function PDFReader() {
         } finally {
             setLoading(false);
         }
+
+        // Pre-fetch and cache the next page in the background so flipping
+        // forward is instant. Runs silently after the current page is shown.
+        const nextPage = pageNum + 1;
+        if (pdfRef.current && nextPage <= totalPages && !pageCache[nextPage]) {
+            try {
+                const page = await pdfRef.current.getPage(nextPage);
+                const containerWidth = canvasWrapRef.current?.parentElement?.clientWidth || 800;
+                const baseScale = Math.max((containerWidth - 40) / page.getViewport({ scale: 1 }).width, 0.5);
+                const zoomPct = zoom;
+                const scale = zoomPct === null ? baseScale : baseScale * (zoomPct / 100);
+                const vp = page.getViewport({ scale });
+                const offscreen = document.createElement("canvas");
+                offscreen.width = vp.width;
+                offscreen.height = vp.height;
+                await page.render({ canvasContext: offscreen.getContext("2d"), viewport: vp }).promise;
+                const textContent = await page.getTextContent();
+                pageCache[nextPage] = { canvas: offscreen, textContent, scale, viewport: vp };
+            } catch { /* silent — pre-fetch failure is fine */ }
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [zoom, searchTerm, bookmarks]);
+    }, [zoom, searchTerm, bookmarks, totalPages]);
+
+    // Invalidate page cache when zoom changes — cached renders are now stale
+    useEffect(() => {
+        Object.keys(pageCache).forEach(k => delete pageCache[k]);
+    }, [zoom]);
 
     useEffect(() => {
         if (pdfLoaded && pdfjsLoaded) renderPage(currentPage);
@@ -243,6 +279,7 @@ function PDFReader() {
         setDiffError("");
         setDiffAdded(new Set());
         setDiffTruncated(false);
+        Object.keys(pageCache).forEach(k => delete pageCache[k]);
     };
 
     // Open a PDF from raw bytes (Uint8Array) into pdf.js
@@ -969,58 +1006,85 @@ function PDFReader() {
                             />
                         </div>
 
-                        {/* Library view */}
+                        {/* Library view — wooden bookshelf */}
                         {showLibrary && (
                             <div className="reader-library">
                                 {libraryLoading && (
-                                    <div className="reader-empty">
+                                    <div className="reader-library-empty">
                                         <div className="loading-dots"><span/><span/><span/></div>
-                                        <p style={{ marginTop: "16px", color: "var(--text-2)", fontSize: "0.9rem" }}>
-                                            Loading your PDFs...
-                                        </p>
+                                        <p>Loading your library…</p>
                                     </div>
                                 )}
 
                                 {!libraryLoading && libraryError && (
-                                    <div className="context-error">❌ {libraryError}</div>
-                                )}
-
-                                {!libraryLoading && !libraryError && savedDocs.length === 0 && (
-                                    <div className="reader-empty" onClick={() => fileRef.current.click()}>
-                                        <div style={{ fontSize: "3.5rem", marginBottom: "16px" }}>📖</div>
-                                        <p style={{ fontWeight: 600, fontSize: "1.1rem", marginBottom: "6px" }}>No PDFs yet</p>
-                                        <p style={{ fontSize: "0.85rem", color: "var(--text-2)" }}>
-                                            Upload a PDF to start reading — it'll be saved here for next time
-                                        </p>
+                                    <div className="reader-library-empty">
+                                        <p style={{ color: "#f87171" }}>❌ {libraryError}</p>
                                     </div>
                                 )}
 
-                                {!libraryLoading && savedDocs.length > 0 && (
-                                    <div className="reader-library-grid">
-                                        {savedDocs.map(doc => (
-                                            <div key={doc._id} className="reader-library-card" onClick={() => openSavedDoc(doc)}>
-                                                <div className="reader-library-card-icon">📄</div>
-                                                <div className="reader-library-card-name" title={doc.fileName}>
-                                                    {doc.fileName}
-                                                </div>
-                                                <div className="reader-library-card-meta">
-                                                    {doc.pageCount ? `${doc.pageCount} pages` : ""}
-                                                    {doc.pageCount ? " · " : ""}{formatSize(doc.fileSize)}
-                                                </div>
-                                                <div className="reader-library-card-meta">
-                                                    Opened {formatDate(doc.lastOpenedAt)}
-                                                    {doc.bookmarkCount > 0 && (
-                                                        <> · 🔖 {doc.bookmarkCount}</>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    className="reader-library-card-delete"
-                                                    onClick={(e) => handleDeleteDoc(e, doc._id)}
-                                                    title="Delete PDF">
-                                                    ✕
-                                                </button>
-                                            </div>
-                                        ))}
+                                {!libraryLoading && !libraryError && savedDocs.length === 0 && (
+                                    <div className="reader-library-empty">
+                                        <div style={{ fontSize: "2.5rem" }}>📚</div>
+                                        <p>Your shelf is empty.<br/>Upload a PDF to place your first book.</p>
+                                    </div>
+                                )}
+
+                                {!libraryLoading && (
+                                    <div className="reader-library-shelf">
+                                        {/* Group books into rows of 8 per shelf */}
+                                        {Array.from(
+                                            { length: Math.ceil((savedDocs.length + 1) / 8) },
+                                            (_, rowIdx) => {
+                                                const rowBooks = savedDocs.slice(rowIdx * 8, rowIdx * 8 + 8);
+                                                return (
+                                                    <div key={rowIdx} className="reader-library-shelf-row">
+                                                        {rowBooks.map(doc => {
+                                                            const color = BOOK_COLORS[
+                                                                parseInt(doc._id.slice(-4), 16) % BOOK_COLORS.length
+                                                            ];
+                                                            const shortName = doc.fileName.replace(/\.pdf$/i, "");
+                                                            return (
+                                                                <div
+                                                                    key={doc._id}
+                                                                    className="reader-library-book"
+                                                                    style={{ background: color }}
+                                                                    onClick={() => openSavedDoc(doc)}
+                                                                    title={shortName}>
+                                                                    {doc.bookmarkCount > 0 && (
+                                                                        <div className="reader-library-book-badge">
+                                                                            🔖 {doc.bookmarkCount}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="reader-library-book-title">
+                                                                        {shortName}
+                                                                    </div>
+                                                                    <div className="reader-library-book-pages">
+                                                                        {doc.pageCount ? `${doc.pageCount}p` : ""}
+                                                                    </div>
+                                                                    <button
+                                                                        className="reader-library-book-delete"
+                                                                        onClick={(e) => handleDeleteDoc(e, doc._id)}
+                                                                        title="Delete PDF">
+                                                                        ✕
+                                                                    </button>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {/* Upload slot on last shelf row */}
+                                                        {rowIdx === Math.ceil((savedDocs.length + 1) / 8) - 1 && (
+                                                            <button
+                                                                className="reader-library-upload-btn"
+                                                                onClick={() => fileRef.current.click()}
+                                                                disabled={uploading}
+                                                                title="Upload new PDF">
+                                                                <span style={{ fontSize: "1.4rem" }}>+</span>
+                                                                <span>Upload</span>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+                                        )}
                                     </div>
                                 )}
                             </div>

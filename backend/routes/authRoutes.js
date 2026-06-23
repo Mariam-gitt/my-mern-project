@@ -1,28 +1,11 @@
-// const express = require("express");
-// const router = express.Router();
-
-// // test route
-// router.get("/", (req, res) => {
-//     res.send("Auth route working 🚀");
-// });
-
-// module.exports = router;
 const express = require("express");
 const router = express.Router();
+const protect = require("../middleware/authMiddleware");
+const { register, login, deleteAccount, testEmail } = require("../controllers/authController");
 
-const {
-    register,
-    login
-} = require("../controllers/authController");
-
-/**
- * Register user
- */
 router.post("/register", register);
-
-/**
- * Login user
- */
 router.post("/login", login);
+router.delete("/account", protect, deleteAccount);
+router.get("/test-email", testEmail);   // debug only
 
 module.exports = router;

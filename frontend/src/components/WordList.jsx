@@ -8,6 +8,9 @@ function WordList({ words, onStatusChange }) {
     const [search, setSearch] = useState("");
     const [updating, setUpdating] = useState(null);
     const [deleting, setDeleting] = useState(null);
+    const [editingNote, setEditingNote] = useState(null);   // word._id being edited
+    const [noteText, setNoteText] = useState("");           // draft note value
+    const [savingNote, setSavingNote] = useState(null);
 
     const toggleStatus = async (word) => {
         const newStatus = word.status === "learned" ? "review" : "learned";
@@ -30,6 +33,30 @@ function WordList({ words, onStatusChange }) {
             alert("Failed to delete word.");
         }
         finally { setDeleting(null); }
+    };
+
+    const startEditNote = (e, word) => {
+        e.stopPropagation();
+        setEditingNote(word._id);
+        setNoteText(word.note || "");
+    };
+
+    const saveNote = async (wordId) => {
+        setSavingNote(wordId);
+        try {
+            await api.patch(`/words/${wordId}/note`, { note: noteText });
+            if (onStatusChange) onStatusChange();
+            setEditingNote(null);
+        } catch {
+            alert("Failed to save note.");
+        } finally {
+            setSavingNote(null);
+        }
+    };
+
+    const cancelNote = () => {
+        setEditingNote(null);
+        setNoteText("");
     };
 
     const filtered = words
@@ -97,6 +124,44 @@ function WordList({ words, onStatusChange }) {
                             <p className="meaning">{w.meaning}</p>
                             {w.exampleSentence && w.exampleSentence !== "No example available" && (
                                 <p className="example">"{w.exampleSentence}"</p>
+                            )}
+
+                            {/* Note section */}
+                            {editingNote === w._id ? (
+                                <div className="word-note-editor">
+                                    <textarea
+                                        className="word-note-textarea"
+                                        value={noteText}
+                                        onChange={e => setNoteText(e.target.value)}
+                                        placeholder="Add your personal note about this word…"
+                                        maxLength={500}
+                                        autoFocus
+                                        rows={3}
+                                    />
+                                    <div className="word-note-actions">
+                                        <span className="word-note-count">{noteText.length}/500</span>
+                                        <button className="word-note-btn save"
+                                            onClick={() => saveNote(w._id)}
+                                            disabled={savingNote === w._id}>
+                                            {savingNote === w._id ? "Saving…" : "Save"}
+                                        </button>
+                                        <button className="word-note-btn cancel" onClick={cancelNote}>
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="word-note-row">
+                                    {w.note ? (
+                                        <p className="word-note-text" onClick={(e) => startEditNote(e, w)}>
+                                            📝 {w.note}
+                                        </p>
+                                    ) : (
+                                        <button className="word-note-add" onClick={(e) => startEditNote(e, w)}>
+                                            + Add note
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     ))}

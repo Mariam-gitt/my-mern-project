@@ -659,6 +659,385 @@ input:focus {
 }
 .btn-icon-delete:hover { color: var(--accent); }
 
+/* ── WORD NOTES ── */
+.word-note-row { margin-top: 8px; }
+
+.word-note-add {
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: 0.02em;
+}
+.word-note-add:hover { color: var(--accent); }
+
+.word-note-text {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  font-style: italic;
+  cursor: pointer;
+  padding: 6px 10px;
+  background: var(--bg);
+  border-left: 3px solid var(--border-dk);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.word-note-text:hover { border-left-color: var(--accent); }
+
+.word-note-editor { margin-top: 8px; }
+
+.word-note-textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-family: var(--body);
+  font-size: 0.82rem;
+  color: var(--text);
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.5;
+  outline: none;
+}
+.word-note-textarea:focus { border-color: var(--text); }
+
+.word-note-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.word-note-count {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  margin-right: auto;
+}
+
+.word-note-btn {
+  border: 1.5px solid var(--border);
+  background: transparent;
+  font-size: 0.75rem;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: var(--body);
+}
+.word-note-btn.save { border-color: var(--text); background: var(--text); color: var(--bg); }
+.word-note-btn.save:hover { background: var(--accent); border-color: var(--accent); }
+.word-note-btn.cancel { color: var(--text-2); }
+.word-note-btn.cancel:hover { border-color: var(--text-2); color: var(--text); }
+
+/* ── DANGER ZONE ── */
+.danger-zone {
+  margin-top: 32px;
+  padding: 18px;
+  border: 1.5px solid #d32f2f44;
+  background: #fff5f5;
+}
+.danger-zone-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #c62828;
+  margin-bottom: 8px;
+}
+.danger-zone-desc {
+  font-size: 0.8rem;
+  color: var(--text-2);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.btn-danger {
+  border: 1.5px solid #c62828;
+  background: transparent;
+  color: #c62828;
+  font-size: 0.82rem;
+  font-family: var(--body);
+  font-weight: 600;
+  padding: 8px 18px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: background 0.12s, color 0.12s;
+}
+.btn-danger:hover { background: #c62828; color: #fff; }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ══════════════════════════════════
+   BOOKSHELF PDF LIBRARY
+══════════════════════════════════ */
+
+/* Room wall behind the shelves */
+.reader-library {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  /* Dark panelled wall: subtle vertical wood-panel lines */
+  background-color: #1a1008;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 58px,
+      rgba(0,0,0,0.18) 58px,
+      rgba(0,0,0,0.18) 60px,
+      transparent 60px,
+      transparent 120px
+    ),
+    /* Ambient warm ceiling glow */
+    radial-gradient(ellipse 80% 30% at 50% 0%, rgba(180,120,50,0.18) 0%, transparent 70%);
+}
+
+.reader-library-shelf {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Each shelf row: books sit in front of the back wall */
+.reader-library-shelf-row {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  /* Top padding = depth above books (back wall visible), bottom = shelf board height */
+  padding: 28px 32px 22px;
+  gap: 10px;
+  min-height: 175px;
+  flex-wrap: wrap;
+  /* Subtle ambient shadow cast down from shelf above */
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,0.35) 0%,
+    rgba(0,0,0,0.10) 20%,
+    transparent 60%
+  );
+}
+
+/* ── Wooden shelf board (the horizontal plank) ── */
+/* Main board face */
+.reader-library-shelf-row::after {
+  content: "";
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 22px;
+  /* Oak/walnut wood grain: base + streaks */
+  background:
+    repeating-linear-gradient(
+      88deg,
+      transparent 0px,
+      rgba(255,255,255,0.03) 2px,
+      transparent 3px,
+      rgba(0,0,0,0.06) 6px,
+      transparent 9px
+    ),
+    linear-gradient(
+      to bottom,
+      #c47c3a 0%,
+      #a05e20 30%,
+      #7d4414 60%,
+      #5c2f0a 100%
+    );
+  /* Top edge highlight (the lip catching light) */
+  box-shadow:
+    0 -1px 0 rgba(255,220,130,0.35),
+    0 2px 8px rgba(0,0,0,0.6),
+    0 6px 18px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,200,80,0.2);
+  z-index: 3;
+}
+
+/* Shelf front lip (depth illusion) */
+.reader-library-shelf-row::before {
+  content: "";
+  position: absolute;
+  bottom: 22px; left: 0; right: 0;
+  height: 6px;
+  background: linear-gradient(
+    to bottom,
+    #e8993e,
+    #b86920
+  );
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,0.4);
+  z-index: 4;
+}
+
+/* Book spine — the core card */
+.reader-library-book {
+  position: relative;
+  width: 48px;
+  height: 130px;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1px 3px 3px 1px;
+  /* Left edge is darker (shadow side), right edge catches more light */
+  box-shadow:
+    -2px 0 0 rgba(0,0,0,0.5),
+    2px 0 4px rgba(255,255,255,0.08),
+    0 6px 16px rgba(0,0,0,0.55),
+    inset -3px 0 8px rgba(0,0,0,0.25),
+    inset 2px 0 4px rgba(255,255,255,0.08);
+  transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.18s ease;
+  z-index: 2;
+  /* Slight page-texture overlay on the spine */
+  background-image:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      rgba(0,0,0,0.04) 1px,
+      transparent 2px
+    );
+}
+
+.reader-library-book:hover {
+  transform: translateY(-14px) scale(1.04);
+  box-shadow:
+    -3px 0 0 rgba(0,0,0,0.5),
+    3px 0 6px rgba(255,255,255,0.1),
+    0 20px 36px rgba(0,0,0,0.7),
+    inset -3px 0 8px rgba(0,0,0,0.25),
+    inset 2px 0 4px rgba(255,255,255,0.1);
+}
+
+/* Book top edge */
+.reader-library-book::before {
+  content: "";
+  position: absolute;
+  top: -3px; left: 1px; right: 1px;
+  height: 3px;
+  background: linear-gradient(to right, rgba(255,255,255,0.15), rgba(255,255,255,0.25), rgba(255,255,255,0.1));
+  border-radius: 2px 2px 0 0;
+}
+
+/* Spine title text — runs bottom to top */
+.reader-library-book-title {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.9);
+  padding: 10px 2px 6px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-height: 100px;
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.8),
+    0 0 8px rgba(0,0,0,0.5);
+  flex: 1;
+  width: 100%;
+  text-align: center;
+}
+
+/* Page count at bottom of spine */
+.reader-library-book-pages {
+  font-size: 0.46rem;
+  color: rgba(255,255,255,0.4);
+  text-align: center;
+  padding: 0 2px 6px;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+}
+
+/* Delete ✕ — hidden until hover */
+.reader-library-book-delete {
+  position: absolute;
+  top: 4px;
+  right: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: #c62828;
+  color: #fff;
+  font-size: 0.56rem;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.reader-library-book:hover .reader-library-book-delete { display: flex; }
+
+/* Bookmark badge — hidden until hover */
+.reader-library-book-badge {
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.5rem;
+  background: #f4c542;
+  color: #1a1008;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+  z-index: 10;
+  display: none;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+.reader-library-book:hover .reader-library-book-badge { display: block; }
+
+/* Upload slot — empty book-shaped gap on the shelf */
+.reader-library-upload-btn {
+  width: 48px;
+  height: 130px;
+  border: 1.5px dashed rgba(255,255,255,0.15);
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.03),
+      rgba(0,0,0,0.12)
+    );
+  border-radius: 1px 3px 3px 1px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.3);
+  font-size: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  z-index: 2;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.reader-library-upload-btn:hover {
+  border-color: rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.65);
+}
+.reader-library-upload-btn span {
+  font-size: 0.5rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Empty shelf state */
+.reader-library-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  color: rgba(255,255,255,0.3);
+  text-align: center;
+  padding: 32px;
+}
+.reader-library-empty p {
+  margin-top: 14px;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+
+
 /* ══════════════════════════════════
    STATUS BUTTONS
 ══════════════════════════════════ */
@@ -1857,73 +2236,7 @@ input:focus {
 
 .reader-right { overflow-y: auto; padding: 22px; background: var(--card); }
 
-/* ── SAVED PDF LIBRARY ── */
-.reader-library {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-  background: #e8e8e8;
-}
-
-.reader-library-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 16px;
-}
-
-.reader-library-card {
-  position: relative;
-  border: 2px solid var(--text);
-  background: var(--card);
-  padding: 18px 14px 14px;
-  cursor: pointer;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
-}
-.reader-library-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 3px 4px 0 var(--text);
-}
-
-.reader-library-card-icon {
-  font-size: 1.8rem;
-  margin-bottom: 10px;
-}
-
-.reader-library-card-name {
-  font-weight: 600;
-  font-size: 0.85rem;
-  margin-bottom: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.reader-library-card-meta {
-  font-size: 0.68rem;
-  color: var(--text-3);
-  line-height: 1.5;
-}
-
-.reader-library-card-delete {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text-3);
-  font-size: 0.68rem;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.reader-library-card:hover .reader-library-card-delete { opacity: 1; }
-.reader-library-card-delete:hover { border-color: var(--accent); color: var(--accent); }
+/* ── SAVED PDF LIBRARY ── (bookshelf UI — see full styles earlier in file) */
 .reader-tip {
   border: 1px solid var(--border);
   padding: 14px;

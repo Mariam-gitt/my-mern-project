@@ -222,3 +222,24 @@ exports.updateStatus = async (req, res) => {
         res.status(500).json({ message: "Failed to update status" });
     }
 };
+
+/**
+ * UPDATE NOTE
+ */
+exports.updateNote = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { note } = req.body;
+
+        const word = await Word.findOneAndUpdate(
+            { _id: id, userId: req.user },
+            { note: (note || "").slice(0, 500) },
+            { new: true }
+        );
+
+        if (!word) return res.status(404).json({ message: "Word not found" });
+        res.json(word);
+    } catch (error) {
+        res.status(500).json({ message: "Failed to update note" });
+    }
+};

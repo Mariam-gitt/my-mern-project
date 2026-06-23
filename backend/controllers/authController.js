@@ -101,25 +101,79 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        // find user
         const user = await User.findOne({ email });
+        if (!user) return res.status(400).json({ message: "User not found" });
 
-        if (!user) {
-            return res.status(400).json({ message: "User not found" });
-        }
-
-        // compare password
         const isMatch = await bcrypt.compare(password, user.password);
-
-        if (!isMatch) {
-            return res.status(400).json({ message: "Invalid password" });
-        }
+        if (!isMatch) return res.status(400).json({ message: "Invalid password" });
 
         const token = signToken(user._id);
-
         res.json({ token, user: user.name });
 
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+/**
+ * DELETE ACCOUNT
+ * Removes the user + all their associated data
+ */
+exports.deleteAccount = async (req, res) => {
+    try {
+        const userId = req.user;
+
+        const Word     = require("../models/Word");
+        const Document = require("../models/Document");
+        const Bookmark = require("../models/Bookmark");
+
+        // Delete all user data in parallel
+        await Promise.all([
+            Word.deleteMany({ userId }),
+            Bookmark.deleteMany({ userId }),
+            Document.deleteMany({ userId }),
+            User.findByIdAndDelete(userId)
+        ]);
+
+        res.json({ message: "Account deleted" });
+
+    } catch (error) {
+        console.log("DELETE ACCOUNT ERROR:", error.message);
+        res.status(500).json({ message: "Failed to delete account" });
+    }
+};
+
+/**
+ * TEST EMAIL  (debug only — remove in production)
+ * Hit GET /api/auth/test-email to verify Resend config is working
+ */
+exports.testEmail = async (req, res) => {
+    if (!process.env.RESEND_API_KEY) {
+        return res.status(500).json({ error: "RESEND_API_KEY is not set in .env" });
+    }
+    try {
+        const resp = await axios.post(
+            "https://api.resend.com/emails",
+            {
+                from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+                to: process.env.RESEND_TEST_TO || req.query.to || "delivered@resend.dev",
+                subject: "WordKnit email test",
+                html: "<p>Email is working ✓</p>"
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+                    "Content-Type": "application/json"
+                },
+                timeout: 8000
+            }
+        );
+        res.json({ ok: true, resend: resp.data });
+    } catch (err) {
+        res.status(500).json({
+            ok: false,
+            error: err.response?.data || err.message,
+            hint: "Check RESEND_API_KEY value and that RESEND_FROM_EMAIL has no wrapping quotes"
+        });
     }
 };
